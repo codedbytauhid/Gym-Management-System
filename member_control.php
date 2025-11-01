@@ -2,7 +2,7 @@
 session_start();
 include('config.php'); // DB connection
 
-// ================= MEMBER REGISTRATION =================
+//Member_Registration
 if (isset($_POST['register'])) {
     $name = $_POST['Name'];
     $age = $_POST['Age'];
