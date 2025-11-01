@@ -1,8 +1,8 @@
 <?php
 session_start();
-require_once 'config.php';
+include('config.php'); // DB connection
 
-// REGISTER
+// ================= MEMBER REGISTRATION =================
 if (isset($_POST['register'])) {
     $name = $_POST['Name'];
     $age = $_POST['Age'];
@@ -10,68 +10,61 @@ if (isset($_POST['register'])) {
     $email = $_POST['Email'];
     $address = $_POST['Address'];
     $gender = $_POST['Gender'];
-    $password = password_hash($_POST['Password'], PASSWORD_DEFAULT);
+    $password = $_POST['Password'];
     $role = $_POST['Role'];
 
-    // Check if email exists
-    $stmt = $conn->prepare("SELECT Email FROM member_registration WHERE Email = ?");
-    $stmt->bind_param("s", $email);
-    $stmt->execute();
-    $result = $stmt->get_result();
+    // Optional: Hash the password for security
+    //$password = password_hash($password, PASSWORD_DEFAULT);
 
-    if ($result->num_rows > 0) {
-        $_SESSION['register_error'] = "Email already exists! Please login.";
-        $_SESSION['active_form'] = "register";
-    } else {
-        $stmt = $conn->prepare("INSERT INTO member_registration (Name, Age, Contact, Email, Address, Gender,  Password, Role) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("sissssss", $name, $age, $contact, $email, $address, $gender, $password, $role);
-        $stmt->execute();
+    // Check if email already exists
+    $check = $conn->prepare("SELECT * FROM members WHERE email = ?");
+    $check->bind_param("s", $email);
+    $check->execute();
+    $check_result = $check->get_result();
 
-        $_SESSION['register_success'] = "You have registered successfully! Please login now.";
-        $_SESSION['active_form'] = "login";
+    if ($check_result->num_rows > 0) {
+        $_SESSION['register_error'] = "Email already registered!";
+        header("Location: index.php#mem_reg");
+        exit();
     }
 
-    header("Location: index.php#mem_reg");
-    exit();
+    // Insert member into database
+    $insert = $conn->prepare("INSERT INTO members (name, age, contact, email, address, gender, password, role) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+    $insert->bind_param("siisssss", $name, $age, $contact, $email, $address, $gender, $password, $role);
+
+    if ($insert->execute()) {
+        $_SESSION['register_success'] = "Registration successful! You can now log in.";
+        header("Location: member_login.php");
+        exit();
+    } else {
+        $_SESSION['register_error'] = "Error: " . $insert->error;
+        header("Location: index.php#mem_reg");
+        exit();
+    }
 }
 
-// LOGIN
+// ================= MEMBER LOGIN =================
 if (isset($_POST['login'])) {
     $email = $_POST['Email'];
     $password = $_POST['Password'];
 
-    $stmt = $conn->prepare("SELECT * FROM member_registration WHERE Email = ?");
-    $stmt->bind_param("s", $email);
+    $query = "SELECT * FROM members WHERE email = ? AND password = ?";
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param("ss", $email, $password);
     $stmt->execute();
     $result = $stmt->get_result();
 
-    if ($row = $result->fetch_assoc()) {
-        if (password_verify($password, $row['Password'])) {
-            // store session
-            $_SESSION['Name']  = $row['Name'];
-            $_SESSION['Email'] = $row['Email'];
-            $_SESSION['Role']  = $row['Role'];
+    if ($result->num_rows == 1) {
+        $member = $result->fetch_assoc();
+        $_SESSION['member_id'] = $member['id'];
+        $_SESSION['member_name'] = $member['name'];
 
-            // redirect by role
-            if ($row['Role'] === 'member') {
-                header("Location: member_dash.php");
-                exit();
-            }
-            else if ($row['Role'] === 'admin') {
-                header("Location: admin_dash.php");
-                exit();
-            }
-            else if ($row['Role'] === 'trainer') {
-                header("Location: trainer_dash.php");
-                exit();
-            }
-        }
+        header("Location: member_dash.php");
+        exit();
+    } else {
+        $_SESSION['login_error'] = "Incorrect email or password!";
+        header("Location: member_login.php");
+        exit();
     }
-
-    // login failed
-    $_SESSION['login_error'] = 'Incorrect email or password';
-    $_SESSION['active_form'] = "login";
-    header("Location: member_login.php");
-    exit();
 }
 ?>
